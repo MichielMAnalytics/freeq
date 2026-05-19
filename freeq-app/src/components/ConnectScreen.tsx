@@ -102,6 +102,18 @@ const LS_CHANNELS = 'freeq-channels';
 const LS_BROKER_TOKEN = 'freeq-broker-token';
 const LS_BROKER_BASE = 'freeq-broker-base';
 
+/** Detect that the SPA is being served from a per-PR or per-issue preview
+ * environment so we can render a small badge above the login card. The
+ * convention used by the boxd-preview slash-command is hostnames shaped
+ * like `<prefix>-pr-<N>.<zone>` or `<prefix>-issue-<N>.<zone>`. Returns
+ * a human-readable label (e.g. `PR #42`) or null on production. */
+function detectPreviewEnv(): { kind: 'PR' | 'issue'; number: string } | null {
+  const host = typeof window !== 'undefined' ? window.location.hostname : '';
+  const m = host.match(/-(pr|issue)-(\d+)\./i);
+  if (!m) return null;
+  return { kind: m[1].toLowerCase() === 'pr' ? 'PR' : 'issue', number: m[2] };
+}
+
 export function ConnectScreen() {
   const registered = useStore((s) => s.registered);
   const connectionState = useStore((s) => s.connectionState);
@@ -412,6 +424,21 @@ export function ConnectScreen() {
       </div>
 
       <div className="bg-bg-secondary border border-border rounded-2xl p-8 w-[420px] max-w-[92vw] shadow-2xl relative animate-fadeIn">
+        {/* Preview-environment indicator (boxd per-PR/per-issue forks). */}
+        {(() => {
+          const env = detectPreviewEnv();
+          if (!env) return null;
+          return (
+            <div
+              className="absolute -top-3 left-1/2 -translate-x-1/2 bg-purple/15 border border-purple/30 text-purple text-[11px] font-medium px-3 py-1 rounded-full flex items-center gap-1.5 whitespace-nowrap shadow-sm"
+              title={`This is a boxd preview environment forked for ${env.kind} #${env.number}. Production is at the canonical host.`}
+            >
+              <span>🌿</span>
+              <span>preview · {env.kind} #{env.number}</span>
+            </div>
+          );
+        })()}
+
         {/* Logo */}
         <div className="text-center mb-6">
           <img src="/freeq.png" alt="freeq" className="w-16 h-16 mx-auto mb-2" />
