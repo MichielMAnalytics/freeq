@@ -42,6 +42,14 @@ export default defineConfig({
         ws: true,
         changeOrigin: false,
       },
+      // AT Protocol OAuth client_metadata is served at the top-level
+      // /client-metadata.json by freeq-server. Without proxying it the dev
+      // server returns index.html (SPA fallback) and the OAuth handshake
+      // breaks with "invalid client metadata".
+      '/client-metadata.json': {
+        target: FREEQ_WEB,
+        changeOrigin: false,
+      },
     },
   },
 })
