@@ -23,6 +23,7 @@ export default defineConfig({
   },
   server: {
     host: '127.0.0.1',
+    allowedHosts: ['.boxd.sh'],
     proxy: {
       '/irc': {
         target: FREEQ_WEB,
@@ -40,6 +41,10 @@ export default defineConfig({
       '/av': {
         target: FREEQ_WEB,
         ws: true,
+        changeOrigin: false,
+      },
+      '/client-metadata.json': {
+        target: FREEQ_WEB,
         changeOrigin: false,
       },
     },

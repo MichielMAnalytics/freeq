@@ -33,6 +33,12 @@ struct BrokerState {
     config: BrokerConfig,
     pending: Mutex<std::collections::HashMap<String, PendingAuth>>,
     db: Mutex<rusqlite::Connection>,
+    // Per-broker-token serialization for /session: AT Protocol refresh tokens
+    // are single-use, so concurrent /session calls for the same token cause
+    // one PDS rotation to succeed and the rest to fail with "replayed",
+    // eventually invalidating the stored token. This map gives each token
+    // its own mutex; concurrent callers queue and observe the rotated token.
+    session_locks: Mutex<std::collections::HashMap<String, Arc<Mutex<()>>>>,
 }
 
 #[derive(Clone)]
@@ -375,6 +381,7 @@ async fn main() {
         },
         pending: Mutex::new(std::collections::HashMap::new()),
         db: Mutex::new(db),
+        session_locks: Mutex::new(std::collections::HashMap::new()),
     });
 
     let app = Router::new()
@@ -386,11 +393,9 @@ async fn main() {
         .route("/session", post(session))
         .layer(
             CorsLayer::new()
-                .allow_origin(AllowOrigin::list([
-                    "https://irc.freeq.at".parse().unwrap(),
-                    "http://localhost:5173".parse().unwrap(),
-                    "http://127.0.0.1:5173".parse().unwrap(),
-                ]))
+                .allow_origin(AllowOrigin::predicate(|origin, _req| {
+                    origin.to_str().map(is_allowed_origin).unwrap_or(false)
+                }))
                 .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
                 .allow_headers(AllowHeaders::any()),
         )
@@ -939,6 +944,22 @@ const ALLOWED_ORIGINS: &[&str] = &[
     "http://127.0.0.1:5173",
 ];
 
+fn is_allowed_origin(origin: &str) -> bool {
+    if ALLOWED_ORIGINS.contains(&origin) {
+        return true;
+    }
+    if let Ok(url) = url::Url::parse(origin) {
+        if url.scheme() == "https" {
+            if let Some(host) = url.host_str() {
+                if host.ends_with(".boxd.sh") && url.port().is_none() {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 async fn session(
     State(state): State<Arc<BrokerState>>,
     headers: HeaderMap,
@@ -946,20 +967,44 @@ async fn session(
 ) -> Result<Json<BrokerSessionResponse>, (StatusCode, String)> {
     // M-13: CSRF protection — reject requests from disallowed origins
     if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
-        if !ALLOWED_ORIGINS.contains(&origin) {
+        if !is_allowed_origin(origin) {
             tracing::warn!(origin = %origin, "Rejected /session request from disallowed origin");
             return Err((StatusCode::FORBIDDEN, "Origin not allowed".to_string()));
         }
     }
 
+    tracing::info!(token_prefix = %req.broker_token.chars().take(8).collect::<String>(), "Session refresh request");
+
+    // Serialize concurrent /session calls for the same broker_token (see
+    // `session_locks` doc on BrokerState).
+    let lock = {
+        let mut map = state.session_locks.lock().await;
+        // Opportunistic GC: drop entries whose only reference is the map
+        // itself (strong_count == 1 means no active holder, no waiter). This
+        // keeps `session_locks` proportional to *concurrent* /session callers,
+        // not the cumulative set of broker_tokens the broker has ever served.
+        map.retain(|_, v| Arc::strong_count(v) > 1);
+        map.entry(req.broker_token.clone())
+            .or_insert_with(|| Arc::new(Mutex::new(())))
+            .clone()
+    };
+    let _guard = lock.lock().await;
+
     let record = get_session(&state, &req.broker_token)
         .await
-        .ok_or((StatusCode::UNAUTHORIZED, "Invalid broker token".to_string()))?;
+        .ok_or_else(|| {
+            tracing::warn!(token_prefix = %req.broker_token.chars().take(8).collect::<String>(), "Session refresh: broker token not in DB");
+            (StatusCode::UNAUTHORIZED, "Invalid broker token".to_string())
+        })?;
 
     let (access_token, refresh_token, dpop_nonce, granted_scope) =
         refresh_access_token(&state.config, &record)
             .await
-            .map_err(|e| (StatusCode::BAD_GATEWAY, format!("Refresh failed: {e}")))?;
+            .map_err(|e| {
+                tracing::warn!(error = %e, did = %record.did, "Session refresh: PDS refresh_access_token failed");
+                (StatusCode::BAD_GATEWAY, format!("Refresh failed: {e}"))
+            })?;
+    tracing::info!(did = %record.did, "Session refresh: PDS refresh succeeded");
 
     // Update stored refresh token + nonce (C-5: encrypt before storing)
     let now = chrono::Utc::now().timestamp();
@@ -1291,7 +1336,19 @@ fn is_valid_return_to(url: &str) -> bool {
         "http://127.0.0.1:",
         "http://127.0.0.1/",
     ];
-    allowed.iter().any(|prefix| url.starts_with(prefix))
+    if allowed.iter().any(|prefix| url.starts_with(prefix)) {
+        return true;
+    }
+    if let Ok(parsed) = url::Url::parse(url) {
+        if parsed.scheme() == "https" {
+            if let Some(host) = parsed.host_str() {
+                if host.ends_with(".boxd.sh") && parsed.port().is_none() {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
 
 /// Sign a request body with HMAC-SHA256. Returns (signature, timestamp) pair.
