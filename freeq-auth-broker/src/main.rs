@@ -22,11 +22,38 @@ use sha2::Sha256;
 
 #[derive(Clone)]
 struct BrokerConfig {
-    public_url: String,
+    // `public_url` is intentionally absent. The broker's public identity
+    // (its `client_id`, `redirect_uri`, asset URLs) is derived per-request
+    // from the `Host` header so the same binary can be forked or rehomed
+    // to a new hostname without restart. See `derive_public_url`.
     freeq_server_url: String,
     shared_secret: String,
     _db_path: String,
     encryption_key: [u8; 32],
+}
+
+/// Build the broker's public origin from the incoming request's headers.
+/// `Host` is the canonical authority (RFC 7230 §5.4). Behind boxd's TLS
+/// proxy the upstream connection is plaintext HTTP, so we default to
+/// `https` for any externally-routable host and `http` for loopback. An
+/// explicit `X-Forwarded-Proto` wins if present.
+fn derive_public_url(headers: &axum::http::HeaderMap) -> String {
+    let host = headers
+        .get("host")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("localhost");
+    let scheme = headers
+        .get("x-forwarded-proto")
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| {
+            if host.starts_with("127.") || host.starts_with("localhost") {
+                "http".to_string()
+            } else {
+                "https".to_string()
+            }
+        });
+    format!("{scheme}://{host}")
 }
 
 struct BrokerState {
@@ -322,10 +349,13 @@ struct BrokerSessionRecord {
 async fn main() {
     tracing_subscriber::fmt().with_env_filter("info").init();
 
-    let public_url =
-        std::env::var("BROKER_PUBLIC_URL").unwrap_or_else(|_| "http://127.0.0.1:8081".to_string());
-    let freeq_server_url =
-        std::env::var("FREEQ_SERVER_URL").unwrap_or_else(|_| "https://irc.freeq.at".to_string());
+    // BROKER_PUBLIC_URL is no longer read — public identity is derived
+    // per-request (see `derive_public_url`). FREEQ_SERVER_URL defaults to
+    // loopback because the broker and freeq-server live on the same host;
+    // the previous default of `https://irc.freeq.at` round-tripped through
+    // the public proxy unnecessarily and broke fork-portability.
+    let freeq_server_url = std::env::var("FREEQ_SERVER_URL")
+        .unwrap_or_else(|_| "http://127.0.0.1:8080".to_string());
     let shared_secret = std::env::var("BROKER_SHARED_SECRET").unwrap_or_else(|_| "".to_string());
     let db_path = std::env::var("BROKER_DB_PATH").unwrap_or_else(|_| "broker.db".to_string());
 
@@ -373,7 +403,6 @@ async fn main() {
 
     let state = Arc::new(BrokerState {
         config: BrokerConfig {
-            public_url,
             freeq_server_url,
             shared_secret,
             _db_path: db_path,
@@ -442,19 +471,17 @@ async fn health_v3() -> Json<serde_json::Value> {
     }))
 }
 
-async fn client_metadata(State(state): State<Arc<BrokerState>>) -> Json<serde_json::Value> {
-    let redirect_uri = format!(
-        "{}/auth/callback",
-        state.config.public_url.trim_end_matches('/')
-    );
-    let client_id = build_client_id(&state.config.public_url, &redirect_uri);
+async fn client_metadata(headers: HeaderMap) -> Json<serde_json::Value> {
+    let public_url = derive_public_url(&headers);
+    let redirect_uri = format!("{}/auth/callback", public_url.trim_end_matches('/'));
+    let client_id = build_client_id(&public_url, &redirect_uri);
     Json(serde_json::json!({
         "client_id": client_id,
         "client_name": "freeq-auth-broker",
-        "client_uri": state.config.public_url,
-        "logo_uri": format!("{}/freeq.png", state.config.public_url),
-        "tos_uri": state.config.public_url,
-        "policy_uri": state.config.public_url,
+        "client_uri": public_url,
+        "logo_uri": format!("{}/freeq.png", public_url),
+        "tos_uri": public_url,
+        "policy_uri": public_url,
         "redirect_uris": [redirect_uri],
         // Union of scopes the broker may ever request, plus
         // `transition:generic` for backward compat with refresh tokens
@@ -565,16 +592,14 @@ async fn auth_login(
         .as_str()
         .ok_or_else(|| (StatusCode::BAD_GATEWAY, "No PAR endpoint".to_string()))?;
 
-    let redirect_uri = format!(
-        "{}/auth/callback",
-        state.config.public_url.trim_end_matches('/')
-    );
+    let public_url = derive_public_url(&headers);
+    let redirect_uri = format!("{}/auth/callback", public_url.trim_end_matches('/'));
     // Identity-only scope. The broker's job is to mint a session token
     // for SASL — that needs nothing more than `atproto`. PDS-touching
     // features (image upload, Bluesky cross-post) are step-ups served
     // by the freeq-server's `/auth/step-up`, never the broker.
     let scope = "atproto";
-    let client_id = build_client_id(&state.config.public_url, &redirect_uri);
+    let client_id = build_client_id(&public_url, &redirect_uri);
 
     let dpop_key = DpopKey::generate();
     let (code_verifier, code_challenge) = generate_pkce();
@@ -997,8 +1022,9 @@ async fn session(
             (StatusCode::UNAUTHORIZED, "Invalid broker token".to_string())
         })?;
 
+    let public_url = derive_public_url(&headers);
     let (access_token, refresh_token, dpop_nonce, granted_scope) =
-        refresh_access_token(&state.config, &record)
+        refresh_access_token(&public_url, &record)
             .await
             .map_err(|e| {
                 tracing::warn!(error = %e, did = %record.did, "Session refresh: PDS refresh_access_token failed");
@@ -1117,12 +1143,12 @@ async fn get_session(state: &Arc<BrokerState>, broker_token: &str) -> Option<Bro
 /// session's first refresh response will carry the narrow scope
 /// explicitly and we'll record it correctly.
 async fn refresh_access_token(
-    config: &BrokerConfig,
+    public_url: &str,
     record: &BrokerSessionRecord,
 ) -> Result<(String, String, Option<String>, String), anyhow::Error> {
     let dpop_key = DpopKey::from_base64url(&record.dpop_key_b64)?;
-    let redirect_uri = format!("{}/auth/callback", config.public_url.trim_end_matches('/'));
-    let client_id = build_client_id(&config.public_url, &redirect_uri);
+    let redirect_uri = format!("{}/auth/callback", public_url.trim_end_matches('/'));
+    let client_id = build_client_id(public_url, &redirect_uri);
     let params = [
         ("grant_type", "refresh_token"),
         ("refresh_token", record.refresh_token.as_str()),

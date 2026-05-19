@@ -35,17 +35,25 @@ pkill -f 'vite'                              2>/dev/null || true
 sleep 1
 
 # 4. freeq-server.
+# Note: --motd intentionally omitted. Anything hostname-specific baked
+# into freeq-server at startup gets stuck on the source VM's hostname
+# after a fork; the broker is fork-portable for the same reason (see its
+# `derive_public_url`). Add hostname-derived strings only via runtime
+# request context, not startup args.
 nohup ./target/release/freeq-server \
   --web-addr 127.0.0.1:8080 \
   --db-path "$DATA_DIR/freeq.db" \
   --broker-shared-secret "$SECRET" \
-  --motd "freeq dev on $BOXD_VM_NAME" \
   > "$LOG_DIR/freeq-server.log" 2>&1 &
 
 # 5. Auth broker.
+# BROKER_PUBLIC_URL is intentionally NOT set: the broker now derives its
+# own public origin from each request's Host header, so the same running
+# process survives a `boxd fork` to a new hostname without restart.
+# FREEQ_SERVER_URL uses loopback because freeq-server lives on the same
+# VM — going through the public proxy was wasteful and also fork-fragile.
 BROKER_SHARED_SECRET="$SECRET" \
-BROKER_PUBLIC_URL="https://auth.$BOXD_VM_NAME.boxd.sh" \
-FREEQ_SERVER_URL="https://$BOXD_VM_NAME.boxd.sh" \
+FREEQ_SERVER_URL="http://127.0.0.1:8080" \
 BROKER_DB_PATH="$DATA_DIR/broker.db" \
 BROKER_ADDR="0.0.0.0:8081" \
 RUST_LOG=info \
