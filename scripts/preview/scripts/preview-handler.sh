@@ -313,44 +313,11 @@ boxd proxy set-port --vm "$VM_NAME" --port 5173 2>&1 \
 boxd proxy new --vm "$VM_NAME" auth --port 8081 2>&1 \
   | sed 's/^/  proxy(auth): /' | tee -a "$VM_LOG" || true
 
-# Wedge check before exec'ing into the fork. The CoW agent can be briefly
-# unresponsive after fork; a 6s probe-then-reboot fallback covers that.
-WEDGE_OK=no
-if [ "$FRESH_FORK" = "yes" ]; then
-  log "checking fork agent responsiveness…"
-  T0=$(date +%s)
-  for i in 1 2 3; do
-    if timeout 8 boxd exec "$VM_NAME" --timeout 5 -- true >/dev/null 2>&1; then
-      WEDGE_OK=yes
-      log "  fork agent responsive after $(( $(date +%s) - T0 ))s"
-      break
-    fi
-    sleep 2
-  done
-
-  if [ "$WEDGE_OK" = "no" ]; then
-    log "  fork agent unresponsive — cold-rebooting"
-    boxd reboot "$VM_NAME" 2>&1 | sed 's/^/    /' | tee -a "$VM_LOG" || true
-    sleep 10
-    for i in $(seq 1 30); do
-      if timeout 10 boxd exec "$VM_NAME" --timeout 5 -- true >/dev/null 2>&1; then
-        WEDGE_OK=yes
-        log "  exec ready after reboot — settling 5s"
-        sleep 5
-        break
-      fi
-      sleep 2
-    done
-  fi
-else
-  WEDGE_OK=yes
-fi
-
 # Fast path: if the golden's HEAD already matches origin/<branch>, the
 # memory-fork has the right code under vite and the broker/server are
 # already serving it. Skip fork-sync entirely.
 FAST_PATH=no
-if [ "$FRESH_FORK" = "yes" ] && [ "$WEDGE_OK" = "yes" ]; then
+if [ "$FRESH_FORK" = "yes" ]; then
   GOLDEN_HEAD_SHA=$(cd "$REPO_DIR" && git rev-parse HEAD 2>/dev/null || echo "")
   PREVIEW_SHA=$(cd "$REPO_DIR" && git rev-parse "origin/$PREVIEW_BRANCH" 2>/dev/null || echo "")
   if [ -n "$GOLDEN_HEAD_SHA" ] && [ "$GOLDEN_HEAD_SHA" = "$PREVIEW_SHA" ]; then
