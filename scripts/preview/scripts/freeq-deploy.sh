@@ -35,8 +35,13 @@ HEAD_SHA=$(git rev-parse HEAD)
 
 # Previous SHA: prefer reflog (works for normal pushes), fall back to a
 # persistent marker file (survives `git reset --hard` and fork CoW).
+#
+# The `|| true` matters: `awk … {print; exit}` closes the pipe early,
+# git gets SIGPIPE (141), and with `set -euo pipefail` that would kill
+# the whole script before we even start. We only want the first non-cur
+# SHA the reflog yields, so swallow the pipe failure.
 PREV_SHA=$(git reflog HEAD --format='%H' 2>/dev/null \
-  | awk -v cur="$HEAD_SHA" '$1!=cur {print $1; exit}')
+  | awk -v cur="$HEAD_SHA" '$1!=cur {print $1; exit}' || true)
 
 ACTION=""
 CHANGED=""
