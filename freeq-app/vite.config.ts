@@ -11,6 +11,18 @@ const GIT_COMMIT = process.env.GIT_COMMIT || (() => {
   catch { return 'unknown' }
 })()
 
+// When vite runs inside a boxd VM the dev server is reached via the
+// `<vm>.boxd.sh` HTTPS proxy on :443, not directly on :5173 — vite's
+// default HMR client URL (wss://<host>:5173) wouldn't connect. Pinning
+// `clientPort: 443` makes the browser connect through the same proxy
+// that served index.html, so HMR works end-to-end on preview envs.
+// Localhost devs are unaffected: with boxd_vm_name unset we fall through
+// to vite's auto-detection.
+const ON_BOXD_VM = !!process.env.boxd_vm_name
+const HMR_CONFIG = ON_BOXD_VM
+  ? { clientPort: 443, protocol: 'wss' as const }
+  : true
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   define: {
@@ -23,7 +35,8 @@ export default defineConfig({
   },
   server: {
     host: '127.0.0.1',
-    allowedHosts: ['.boxd.sh'],
+    allowedHosts: ['.boxd.sh', '.boxd-stg.sh'],
+    hmr: HMR_CONFIG,
     proxy: {
       '/irc': {
         target: FREEQ_WEB,
