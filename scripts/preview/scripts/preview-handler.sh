@@ -347,7 +347,12 @@ echo \"===== \$(date -u +%FT%TZ) fork-sync attempt $attempt branch=$PREVIEW_BRAN
 cd '$REPO_DIR'
 rm -f .git/index.lock 2>/dev/null || true
 git fetch --quiet origin '$PREVIEW_BRANCH'
-git reset --hard 'origin/$PREVIEW_BRANCH'
+# checkout -B leaves the fork on the branch the PR/issue actually targets,
+# so a later \`git pull\` inside the fork picks up new commits from the
+# right upstream. \`git reset --hard\` would have kept the fork on whatever
+# branch was already checked out (often \"main\" from the golden), then
+# point that branch's HEAD at the PR-branch commits — fork-confusion.
+git checkout -B '$PREVIEW_BRANCH' 'origin/$PREVIEW_BRANCH'
 echo \"HEAD now \$(git rev-parse --short HEAD)\"
 bash $OPT_DIR/scripts/freeq-deploy.sh
 " >"$SYNC_OUT" 2>&1; then
