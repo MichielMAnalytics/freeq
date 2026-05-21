@@ -102,6 +102,18 @@ const LS_CHANNELS = 'freeq-channels';
 const LS_BROKER_TOKEN = 'freeq-broker-token';
 const LS_BROKER_BASE = 'freeq-broker-base';
 
+/** Detect that the SPA is being served from a per-PR or per-issue preview
+ * environment so we can render a small badge above the login card. The
+ * convention used by the boxd-preview slash-command is hostnames shaped
+ * like `<prefix>-pr-<N>.<zone>` or `<prefix>-issue-<N>.<zone>`. Returns
+ * a human-readable label (e.g. `PR #42`) or null on production. */
+function detectPreviewEnv(): { kind: 'PR' | 'issue'; number: string } | null {
+  const host = typeof window !== 'undefined' ? window.location.hostname : '';
+  const m = host.match(/-(pr|issue)-(\d+)\./i);
+  if (!m) return null;
+  return { kind: m[1].toLowerCase() === 'pr' ? 'PR' : 'issue', number: m[2] };
+}
+
 export function ConnectScreen() {
   const registered = useStore((s) => s.registered);
   const connectionState = useStore((s) => s.connectionState);
@@ -404,25 +416,41 @@ export function ConnectScreen() {
   }
 
   return (
-    <div className="flex-1 flex items-center justify-center bg-bg relative overflow-hidden">
-      {/* Background decoration */}
+    <div className="flex-1 flex items-center justify-center bg-bg relative overflow-y-auto py-8">
+      {/* Background decoration. Kept overflow-hidden on this inner wrapper so
+          the blur circles don't push a horizontal scrollbar while the outer
+          container handles vertical scroll for tall cards. */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-accent/[0.03] rounded-full blur-[100px]" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple/[0.03] rounded-full blur-[100px]" />
       </div>
 
-      <div className="bg-bg-secondary border border-border rounded-2xl p-8 w-[420px] max-w-[92vw] shadow-2xl relative animate-fadeIn">
+      <div className="bg-bg-secondary border border-border rounded-2xl p-6 w-[420px] max-w-[92vw] shadow-2xl relative animate-fadeIn my-auto">
+        {/* Preview-environment indicator (boxd per-PR/per-issue forks). */}
+        {(() => {
+          const env = detectPreviewEnv();
+          if (!env) return null;
+          return (
+            <div
+              className="absolute -top-3 left-1/2 -translate-x-1/2 bg-purple/15 border border-purple/30 text-purple text-[11px] font-medium px-3 py-1 rounded-full flex items-center gap-1.5 whitespace-nowrap shadow-sm"
+              title={`This is a boxd preview environment forked for ${env.kind} #${env.number}. Production is at the canonical host.`}
+            >
+              <span>🌿</span>
+              <span>preview · {env.kind} #{env.number}</span>
+            </div>
+          );
+        })()}
+
         {/* Logo */}
-        <div className="text-center mb-6">
-          <img src="/freeq.png" alt="freeq" className="w-16 h-16 mx-auto mb-2" />
-          <h1 className="text-3xl font-bold tracking-tight">
+        <div className="text-center mb-4">
+          <img src="/freeq.png" alt="freeq" className="w-12 h-12 mx-auto mb-1.5" />
+          <h1 className="text-2xl font-bold tracking-tight">
             <span className="text-accent">free</span><span className="text-fg">q</span>
           </h1>
-          <p className="text-fg-dim text-xs mt-1 leading-relaxed max-w-[300px] mx-auto">
-            Chat where your identity is yours. Messages are cryptographically signed.
-            No platform lock-in. E2EE DMs.
+          <p className="text-fg-dim text-xs mt-1 leading-snug max-w-[300px] mx-auto">
+            Chat where your identity is yours. Signed messages, E2EE DMs, no platform lock-in.
           </p>
-          <div className="flex justify-center gap-4 mt-2.5 text-[10px] text-fg-dim">
+          <div className="flex justify-center gap-4 mt-2 text-[10px] text-fg-dim">
             <span className="flex items-center gap-1">
               <span className="text-success">✓</span> Signed messages
             </span>
@@ -436,7 +464,7 @@ export function ConnectScreen() {
         </div>
 
         {/* Mode tabs */}
-        <div className="flex gap-1 bg-bg rounded-lg p-1 mb-4">
+        <div className="flex gap-1 bg-bg rounded-lg p-1 mb-3">
           <button
             onClick={() => setMode('at-proto')}
             className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-colors ${
@@ -473,7 +501,7 @@ export function ConnectScreen() {
                   onChange={(e) => setHandle(e.target.value)}
                   placeholder="you.bsky.social"
                   onKeyDown={(e) => e.key === 'Enter' && doAtLogin()}
-                  className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-base text-fg outline-none focus:border-accent transition-colors placeholder:text-fg-dim"
+                  className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-base text-fg outline-none focus:border-accent transition-colors placeholder:text-fg-dim"
                 />
               </div>
 
@@ -487,7 +515,7 @@ export function ConnectScreen() {
                   onChange={(e) => setAtNick(e.target.value)}
                   placeholder="derived from handle"
                   onKeyDown={(e) => e.key === 'Enter' && doAtLogin()}
-                  className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-base text-fg outline-none focus:border-accent transition-colors placeholder:text-fg-dim"
+                  className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-base text-fg outline-none focus:border-accent transition-colors placeholder:text-fg-dim"
                 />
                 <p className="text-xs text-fg-dim mt-1.5">
                   Your IRC nick. Defaults to your handle — edit if you prefer something different.
@@ -507,7 +535,7 @@ export function ConnectScreen() {
                   onChange={(e) => setNick(e.target.value)}
                   placeholder="your_nick"
                   onKeyDown={(e) => e.key === 'Enter' && doGuestLogin()}
-                  className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-base text-fg outline-none focus:border-accent transition-colors placeholder:text-fg-dim"
+                  className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-base text-fg outline-none focus:border-accent transition-colors placeholder:text-fg-dim"
                 />
               </div>
             </>
@@ -523,7 +551,7 @@ export function ConnectScreen() {
               onChange={(e) => setChannels(e.target.value)}
               placeholder="#freeq"
               onKeyDown={(e) => e.key === 'Enter' && (mode === 'at-proto' ? doAtLogin() : doGuestLogin())}
-              className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-base text-fg outline-none focus:border-accent transition-colors placeholder:text-fg-dim"
+              className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-base text-fg outline-none focus:border-accent transition-colors placeholder:text-fg-dim"
             />
           </div>
 
@@ -568,18 +596,9 @@ export function ConnectScreen() {
           {/* Consent preview — show what we're asking Bluesky for BEFORE
               redirecting, so the consent screen there is no surprise. */}
           {mode === 'at-proto' && !oauthPending && !connecting && (
-            <div className="bg-bg/50 border border-border/60 rounded-lg px-3 py-2.5 text-[11px] leading-relaxed text-fg-dim">
-              <div className="font-semibold text-fg-muted mb-1">
-                What freeq will ask Bluesky for
-              </div>
-              <ul className="space-y-0.5 list-disc list-inside marker:text-fg-dim/60">
-                <li>Prove you are <span className="font-mono">@{handle || 'your.handle'}</span></li>
-              </ul>
-              <div className="mt-1.5 text-fg-dim/80">
-                That's it for sign-in. Image upload to your PDS asks for one
-                extra permission, only the first time you upload — never up
-                front.
-              </div>
+            <div className="bg-bg/50 border border-border/60 rounded-lg px-3 py-2 text-[11px] leading-snug text-fg-dim">
+              <span className="font-semibold text-fg-muted">Bluesky asks for:</span>{' '}
+              proof you are <span className="font-mono">@{handle || 'your.handle'}</span>. Image upload requests one more scope on first upload.
             </div>
           )}
 
@@ -587,7 +606,7 @@ export function ConnectScreen() {
           <button
             onClick={mode === 'at-proto' ? doAtLogin : doGuestLogin}
             disabled={connecting || oauthPending}
-            className="w-full bg-accent text-black font-bold py-3 rounded-xl text-lg transition-all hover:bg-accent-hover hover:shadow-[0_0_24px_rgba(0,212,170,0.15)] disabled:opacity-50 disabled:hover:shadow-none mt-1"
+            className="w-full bg-accent text-black font-bold py-2.5 rounded-xl text-base transition-all hover:bg-accent-hover hover:shadow-[0_0_24px_rgba(0,212,170,0.15)] disabled:opacity-50 disabled:hover:shadow-none mt-1"
           >
             {oauthPending ? (
               <span className="flex items-center justify-center gap-2">
@@ -628,7 +647,7 @@ export function ConnectScreen() {
           </div>
         )}
 
-        <div className="text-center mt-5 flex items-center justify-center gap-3 text-[10px]">
+        <div className="text-center mt-4 flex items-center justify-center gap-3 text-[10px]">
           <a href="https://freeq.at" target="_blank" className="text-fg-dim hover:text-fg-muted">freeq.at</a>
           <span className="text-border">·</span>
           <a href="https://github.com/chad/freeq" target="_blank" className="text-fg-dim hover:text-fg-muted">GitHub</a>
