@@ -425,7 +425,7 @@ export function ConnectScreen() {
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple/[0.03] rounded-full blur-[100px]" />
       </div>
 
-      <div className="bg-bg-secondary border border-border rounded-2xl p-8 w-[420px] max-w-[92vw] shadow-2xl relative animate-fadeIn my-auto">
+      <div className="bg-bg-secondary border border-border rounded-2xl p-6 w-[420px] max-w-[92vw] shadow-2xl relative animate-fadeIn my-auto">
         {/* Preview-environment indicator (boxd per-PR/per-issue forks). */}
         {(() => {
           const env = detectPreviewEnv();
@@ -442,16 +442,15 @@ export function ConnectScreen() {
         })()}
 
         {/* Logo */}
-        <div className="text-center mb-6">
-          <img src="/freeq.png" alt="freeq" className="w-16 h-16 mx-auto mb-2" />
-          <h1 className="text-3xl font-bold tracking-tight">
+        <div className="text-center mb-4">
+          <img src="/freeq.png" alt="freeq" className="w-12 h-12 mx-auto mb-1.5" />
+          <h1 className="text-2xl font-bold tracking-tight">
             <span className="text-accent">free</span><span className="text-fg">q</span>
           </h1>
-          <p className="text-fg-dim text-xs mt-1 leading-relaxed max-w-[300px] mx-auto">
-            Chat where your identity is yours. Messages are cryptographically signed.
-            No platform lock-in. E2EE DMs.
+          <p className="text-fg-dim text-xs mt-1 leading-snug max-w-[300px] mx-auto">
+            Chat where your identity is yours. Signed messages, E2EE DMs, no platform lock-in.
           </p>
-          <div className="flex justify-center gap-4 mt-2.5 text-[10px] text-fg-dim">
+          <div className="flex justify-center gap-4 mt-2 text-[10px] text-fg-dim">
             <span className="flex items-center gap-1">
               <span className="text-success">✓</span> Signed messages
             </span>
@@ -465,7 +464,7 @@ export function ConnectScreen() {
         </div>
 
         {/* Mode tabs */}
-        <div className="flex gap-1 bg-bg rounded-lg p-1 mb-4">
+        <div className="flex gap-1 bg-bg rounded-lg p-1 mb-3">
           <button
             onClick={() => setMode('at-proto')}
             className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-colors ${
