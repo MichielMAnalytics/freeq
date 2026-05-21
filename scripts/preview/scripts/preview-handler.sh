@@ -410,7 +410,12 @@ $RUST_RESTART_NOTE"
 ✅ **preview ready for \`$PREVIEW_BRANCH\`**
 
 🌐 $URL
-🔌 SSH: \`ssh $SSH_HOST\`
+
+🔌 SSH (hover the block for GitHub's copy button):
+
+\`\`\`sh
+ssh $SSH_HOST
+\`\`\`
 $EXTRA
 
 ---
@@ -427,10 +432,16 @@ else
 🔧 **preview env created, app still warming up for \`$PREVIEW_BRANCH\`**
 
 🌐 $URL  (last HTTP \`$CODE\` — proxy reachable, app not yet serving)
-🔌 SSH: \`ssh $SSH_HOST\`
+
+🔌 SSH:
+
+\`\`\`sh
+ssh $SSH_HOST
+\`\`\`
 
 Give it ~1 min and refresh. Still not responding?
-\`\`\`
+
+\`\`\`sh
 ssh $SSH_HOST
 ss -tlnp | grep -E ':(5173|8080|8081)'
 \`\`\`
