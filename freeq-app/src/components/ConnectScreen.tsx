@@ -416,14 +416,16 @@ export function ConnectScreen() {
   }
 
   return (
-    <div className="flex-1 flex items-center justify-center bg-bg relative overflow-hidden">
-      {/* Background decoration */}
+    <div className="flex-1 flex items-center justify-center bg-bg relative overflow-y-auto py-8">
+      {/* Background decoration. Kept overflow-hidden on this inner wrapper so
+          the blur circles don't push a horizontal scrollbar while the outer
+          container handles vertical scroll for tall cards. */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-accent/[0.03] rounded-full blur-[100px]" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple/[0.03] rounded-full blur-[100px]" />
       </div>
 
-      <div className="bg-bg-secondary border border-border rounded-2xl p-8 w-[420px] max-w-[92vw] shadow-2xl relative animate-fadeIn">
+      <div className="bg-bg-secondary border border-border rounded-2xl p-8 w-[420px] max-w-[92vw] shadow-2xl relative animate-fadeIn my-auto">
         {/* Preview-environment indicator (boxd per-PR/per-issue forks). */}
         {(() => {
           const env = detectPreviewEnv();
