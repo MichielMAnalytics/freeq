@@ -355,7 +355,10 @@ bash $OPT_DIR/scripts/freeq-deploy.sh
       sed 's/^/  fork-sync: /' "$SYNC_OUT" | tee -a "$VM_LOG"
       break
     fi
-    log "fork-sync attempt $attempt FAILED in $(( $(date +%s) - T0 ))s (rc=$?)"
+    # Capture the real exit code immediately — $? gets clobbered by the
+    # $(date) substitution in the log message that follows.
+    EXEC_RC=$?
+    log "fork-sync attempt $attempt FAILED in $(( $(date +%s) - T0 ))s (rc=$EXEC_RC)"
     sed 's/^/  fork-sync (attempt '$attempt' failed): /' "$SYNC_OUT" | tee -a "$VM_LOG"
     if [ "$attempt" -lt 3 ]; then
       log "retrying in 5s…"

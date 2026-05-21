@@ -69,22 +69,38 @@ fi
 # signal when nothing in this push actually changes the rust side.
 rm -f "$RESTART_FLAG" "$RESTART_NOTE"
 
-# Classify each changed path. Three buckets:
+# Classify each changed path. Four buckets:
 #   FRONTEND_DEPS  — package.json / lockfile / SDK source → need `npm install` / SDK rebuild
 #   RUST_CHANGED   — any rust source or build config → stub restart
 #   FRONTEND_SRC   — TypeScript/CSS/etc. under freeq-app/ → vite HMR handles it
+#   PLATFORM_ONLY  — preview scripts, READMEs, etc. → no runtime action needed
 needs_npm_install=no
 needs_sdk_build=no
 rust_paths=""
+runtime_paths=""
+platform_only_paths=""
 while IFS= read -r f; do
   [ -z "$f" ] && continue
   case "$f" in
     freeq-app/package.json|freeq-app/package-lock.json)
-      needs_npm_install=yes ;;
+      needs_npm_install=yes
+      runtime_paths="$runtime_paths $f" ;;
     freeq-sdk-js/*)
-      needs_sdk_build=yes ;;
+      needs_sdk_build=yes
+      runtime_paths="$runtime_paths $f" ;;
     freeq-server/*|freeq-auth-broker/*|freeq-sdk/*|Cargo.toml|Cargo.lock|*.rs)
-      rust_paths="$rust_paths $f" ;;
+      rust_paths="$rust_paths $f"
+      runtime_paths="$runtime_paths $f" ;;
+    freeq-app/*)
+      # Anything else under freeq-app/ is frontend source — vite picks it up.
+      runtime_paths="$runtime_paths $f" ;;
+    scripts/preview/*|*.md|.github/*|.gitignore|LICENSE)
+      # Preview-platform tooling and docs don't affect the running services.
+      # Changes here take effect on the next \`/boxd-preview\`, not via HMR.
+      platform_only_paths="$platform_only_paths $f" ;;
+    *)
+      # Default to runtime so we never silently miss a real change.
+      runtime_paths="$runtime_paths $f" ;;
   esac
 done <<< "$CHANGED"
 
@@ -131,15 +147,20 @@ NOTE
   echo "  callers should surface this to the user via a PR comment / log."
 fi
 
-# Decide the visible action for the log line at the bottom.
+# Decide the visible action for the log line at the bottom. Priority:
+#   rust > frontend-deps > vite-hmr > platform-only > none
+# A push that touches *both* rust and a preview script is "rust-restart-needed"
+# — the rust note is the user-visible blocker.
 if [ "$ACTION" = "first" ] || [ "$ACTION" = "none" ]; then
   :
 elif [ -n "$rust_paths" ]; then
   ACTION="rust-restart-needed"
 elif [ "$needs_npm_install" = "yes" ] || [ "$needs_sdk_build" = "yes" ]; then
   ACTION="deps-updated"
-elif [ -n "$CHANGED" ]; then
+elif [ -n "$runtime_paths" ]; then
   ACTION="vite-hmr"
+elif [ -n "$platform_only_paths" ]; then
+  ACTION="platform-only"
 else
   ACTION="none"
 fi
@@ -150,6 +171,9 @@ case "$ACTION" in
     ;;
   vite-hmr)
     echo "frontend source only — vite HMR will pick up the change within a few seconds"
+    ;;
+  platform-only)
+    echo "preview-platform changes only — no runtime action needed (effective on next /boxd-preview)"
     ;;
   deps-updated)
     echo "frontend deps refreshed; vite restarts on its own"
