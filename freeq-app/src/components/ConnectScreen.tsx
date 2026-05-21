@@ -501,7 +501,7 @@ export function ConnectScreen() {
                   onChange={(e) => setHandle(e.target.value)}
                   placeholder="you.bsky.social"
                   onKeyDown={(e) => e.key === 'Enter' && doAtLogin()}
-                  className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-base text-fg outline-none focus:border-accent transition-colors placeholder:text-fg-dim"
+                  className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-base text-fg outline-none focus:border-accent transition-colors placeholder:text-fg-dim"
                 />
               </div>
 
@@ -515,7 +515,7 @@ export function ConnectScreen() {
                   onChange={(e) => setAtNick(e.target.value)}
                   placeholder="derived from handle"
                   onKeyDown={(e) => e.key === 'Enter' && doAtLogin()}
-                  className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-base text-fg outline-none focus:border-accent transition-colors placeholder:text-fg-dim"
+                  className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-base text-fg outline-none focus:border-accent transition-colors placeholder:text-fg-dim"
                 />
                 <p className="text-xs text-fg-dim mt-1.5">
                   Your IRC nick. Defaults to your handle — edit if you prefer something different.
@@ -535,7 +535,7 @@ export function ConnectScreen() {
                   onChange={(e) => setNick(e.target.value)}
                   placeholder="your_nick"
                   onKeyDown={(e) => e.key === 'Enter' && doGuestLogin()}
-                  className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-base text-fg outline-none focus:border-accent transition-colors placeholder:text-fg-dim"
+                  className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-base text-fg outline-none focus:border-accent transition-colors placeholder:text-fg-dim"
                 />
               </div>
             </>
@@ -551,7 +551,7 @@ export function ConnectScreen() {
               onChange={(e) => setChannels(e.target.value)}
               placeholder="#freeq"
               onKeyDown={(e) => e.key === 'Enter' && (mode === 'at-proto' ? doAtLogin() : doGuestLogin())}
-              className="w-full bg-bg border border-border rounded-lg px-4 py-3 text-base text-fg outline-none focus:border-accent transition-colors placeholder:text-fg-dim"
+              className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-base text-fg outline-none focus:border-accent transition-colors placeholder:text-fg-dim"
             />
           </div>
 
@@ -596,18 +596,9 @@ export function ConnectScreen() {
           {/* Consent preview — show what we're asking Bluesky for BEFORE
               redirecting, so the consent screen there is no surprise. */}
           {mode === 'at-proto' && !oauthPending && !connecting && (
-            <div className="bg-bg/50 border border-border/60 rounded-lg px-3 py-2.5 text-[11px] leading-relaxed text-fg-dim">
-              <div className="font-semibold text-fg-muted mb-1">
-                What freeq will ask Bluesky for
-              </div>
-              <ul className="space-y-0.5 list-disc list-inside marker:text-fg-dim/60">
-                <li>Prove you are <span className="font-mono">@{handle || 'your.handle'}</span></li>
-              </ul>
-              <div className="mt-1.5 text-fg-dim/80">
-                That's it for sign-in. Image upload to your PDS asks for one
-                extra permission, only the first time you upload — never up
-                front.
-              </div>
+            <div className="bg-bg/50 border border-border/60 rounded-lg px-3 py-2 text-[11px] leading-snug text-fg-dim">
+              <span className="font-semibold text-fg-muted">Bluesky asks for:</span>{' '}
+              proof you are <span className="font-mono">@{handle || 'your.handle'}</span>. Image upload requests one more scope on first upload.
             </div>
           )}
 
@@ -615,7 +606,7 @@ export function ConnectScreen() {
           <button
             onClick={mode === 'at-proto' ? doAtLogin : doGuestLogin}
             disabled={connecting || oauthPending}
-            className="w-full bg-accent text-black font-bold py-3 rounded-xl text-lg transition-all hover:bg-accent-hover hover:shadow-[0_0_24px_rgba(0,212,170,0.15)] disabled:opacity-50 disabled:hover:shadow-none mt-1"
+            className="w-full bg-accent text-black font-bold py-2.5 rounded-xl text-base transition-all hover:bg-accent-hover hover:shadow-[0_0_24px_rgba(0,212,170,0.15)] disabled:opacity-50 disabled:hover:shadow-none mt-1"
           >
             {oauthPending ? (
               <span className="flex items-center justify-center gap-2">
@@ -656,7 +647,7 @@ export function ConnectScreen() {
           </div>
         )}
 
-        <div className="text-center mt-5 flex items-center justify-center gap-3 text-[10px]">
+        <div className="text-center mt-4 flex items-center justify-center gap-3 text-[10px]">
           <a href="https://freeq.at" target="_blank" className="text-fg-dim hover:text-fg-muted">freeq.at</a>
           <span className="text-border">·</span>
           <a href="https://github.com/chad/freeq" target="_blank" className="text-fg-dim hover:text-fg-muted">GitHub</a>
