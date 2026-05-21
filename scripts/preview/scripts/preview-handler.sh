@@ -28,6 +28,17 @@ REPO_DIR=${REPO_DIR:-/home/boxd/freeq}
 VM_PREFIX=${VM_PREFIX:-freeq-pr}
 VM_PREFIX_ISSUE=${VM_PREFIX_ISSUE:-freeq-issue}
 DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
+# ZONE comes from the conf (written by enable-preview.sh). Fall back to
+# deriving from the live boxd info, then to boxd.sh, so the handler
+# still works if the conf is missing or stale.
+if [ -z "${ZONE:-}" ]; then
+  CURRENT_VM=$(boxd info --json 2>/dev/null | jq -r '.name // empty' 2>/dev/null)
+  CURRENT_VM=${CURRENT_VM:-$(hostname -s)}
+  ZONE=$(boxd info --json 2>/dev/null \
+    | jq -r '.proxies[]? | select(.is_default==true) | .domain' \
+    | sed -E "s/^${CURRENT_VM//./\\.}\.//")
+fi
+ZONE=${ZONE:-boxd.sh}
 # Vite picks up file changes within ~1–2s of disk write, but on a fresh
 # fork it can take a few seconds for the dev-server worker to come back
 # online. 5s ready-poll → up to 60 iterations = 5 min hard cap.
@@ -133,7 +144,7 @@ else
   fi
   VM_NAME="$VM_PREFIX_ISSUE-$ISSUE_NUMBER"
 fi
-URL="https://$VM_NAME.boxd.sh"
+URL="https://$VM_NAME.$ZONE"
 VM_LOG="$LOG_DIR/$VM_NAME.log"
 {
   echo
@@ -161,7 +172,7 @@ log "acquired lock $LOCK_FILE (PID $$)"
 
 # Pre-flight: don't fork from a broken golden.
 GOLDEN_HOST=$(boxd info --json 2>/dev/null | jq -r '.url // empty')
-[ -z "$GOLDEN_HOST" ] && GOLDEN_HOST="$(hostname).boxd.sh"
+[ -z "$GOLDEN_HOST" ] && GOLDEN_HOST="$(hostname).$ZONE"
 GOLDEN_URL="https://$GOLDEN_HOST/"
 log "preflight: probing golden at $GOLDEN_URL"
 GOLDEN_CODE=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 8 "$GOLDEN_URL" 2>/dev/null || echo "000")
@@ -174,7 +185,7 @@ fi
 
 BOOT_COMMENT_ID=$(post_comment "⏳ creating boxd preview env for \`$PREVIEW_BRANCH\` → $URL
 
-you can also ssh in: \`ssh $VM_NAME.boxd.sh\`
+you can also ssh in: \`ssh $VM_NAME.$ZONE\`
 
 <sub>hang tight, this takes a moment</sub>")
 log "boot comment id: $BOOT_COMMENT_ID"
@@ -401,7 +412,7 @@ for i in $(seq 1 "$URL_POLL_MAX_ATTEMPTS"); do
 done
 log "ready=$READY (last HTTP $CODE) after $(( $(date +%s) - T0 ))s"
 
-SSH_HOST="$VM_NAME.boxd.sh"
+SSH_HOST="$VM_NAME.$ZONE"
 FOOTER="<sub>made with ❤️ by the <a href=\"https://boxd.sh\">boxd.sh</a> team</sub>"
 
 if [ "$READY" = "yes" ]; then
