@@ -18,9 +18,12 @@
 #   - No language-runtime bootstrap (cargo / npm install assumed done by the
 #     operator on first boot — see README.md)
 #
-# Auth precondition: `gh auth login` must already be authenticated, or
-# GH_TOKEN_INIT must be set in the environment. Without that the script
-# cannot register the GitHub webhooks.
+# Auth: the script reuses whatever gh credentials are already present
+# (GH_TOKEN env var or a prior `gh auth login`). Only if there are none
+# at all do we fall back to a one-shot GH_TOKEN_INIT env var. The classic
+# `repo` scope covers webhook management; fine-grained PATs additionally
+# need `Webhooks: read+write` + `Administration: read` + `Issues/PRs:
+# read+write`.
 #
 # Env-var overrides (all optional; defaults are golden-VM-appropriate):
 #   OWNER=<github-account>      default: derived from repo origin URL
@@ -187,33 +190,22 @@ if ! [[ "$OWNER_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
   exit 1
 fi
 
-# gh CLI auth: existing → GH_TOKEN_INIT → fail loud (interactive paste
-# omitted intentionally; on boxd VMs `gh auth login` from the operator's
-# shell session is the standard path).
-if ! gh auth status >/dev/null 2>&1 && [ -n "${GH_TOKEN_INIT:-}" ]; then
+# gh CLI auth: prefer the existing session (works with GH_TOKEN env vars
+# or a prior `gh auth login`). Only fall back to GH_TOKEN_INIT if there's
+# no usable auth at all. If we end up with neither, fail with a short hint.
+if gh auth status >/dev/null 2>&1; then
+  GH_USER=$(gh api user --jq .login 2>/dev/null || echo "?")
+  echo "==> gh CLI already authenticated as $GH_USER — using existing credentials"
+elif [ -n "${GH_TOKEN_INIT:-}" ]; then
   echo "==> authenticating gh CLI from GH_TOKEN_INIT"
   ( unset GH_TOKEN GITHUB_TOKEN
     printf '%s\n' "$GH_TOKEN_INIT" \
       | gh auth login --with-token --hostname github.com )
-fi
-
-if ! gh auth status >/dev/null 2>&1; then
+else
   cat >&2 <<HELP
 
-  ERROR: gh CLI is not authenticated. Cannot register webhooks.
-
-  Authenticate once on this VM:
-    gh auth login
-
-  Or run non-interactively:
-    GH_TOKEN_INIT=<fine-grained-pat> bash $0
-
-  The PAT needs (on $OWNER_REPO):
-    Administration   Read-only   (collaborators lookup for /boxd-preview)
-    Contents         Read-only   (clone + fetch)
-    Issues           Read+write  (post comments)
-    Pull requests    Read+write  (post comments)
-    Webhooks         Read+write  (register hooks)
+  ERROR: gh CLI has no usable credentials. Run \`gh auth login\` first
+  (or set GH_TOKEN / GITHUB_TOKEN in the environment), then re-run.
 
 HELP
   exit 1
