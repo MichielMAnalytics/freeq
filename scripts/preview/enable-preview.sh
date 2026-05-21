@@ -165,6 +165,12 @@ sudo chown root:boxd /etc/freeq-webhook.conf.json
 sudo chmod 640 /etc/freeq-webhook.conf.json
 
 # Log files for the async handlers + the listener itself.
+# Per-VM log dir used by preview-handler.sh — created by sudo on first
+# install, so we have to chown it explicitly or the unprivileged handler
+# (spawned by webhook(8)) can't write the per-fork .log files.
+sudo mkdir -p /var/log/freeq-preview
+sudo chown boxd:boxd /var/log/freeq-preview
+
 for log in freeq-webhook.log freeq-golden-sync.log freeq-preview.log; do
   sudo touch "/var/log/$log"
   sudo chown boxd:boxd "/var/log/$log"
