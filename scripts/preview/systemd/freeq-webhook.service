@@ -1,0 +1,20 @@
+[Unit]
+Description=GitHub webhook receiver for freeq preview platform
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=boxd
+ExecStart=/usr/bin/webhook \
+  -hooks /etc/freeq-webhook.conf.json \
+  -port 9090 \
+  -ip 0.0.0.0 \
+  -verbose
+Restart=on-failure
+RestartSec=2
+StandardOutput=append:/var/log/freeq-webhook.log
+StandardError=append:/var/log/freeq-webhook.log
+
+[Install]
+WantedBy=multi-user.target

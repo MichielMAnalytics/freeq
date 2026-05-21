@@ -1,0 +1,80 @@
+[
+  {
+    "id": "deploy",
+    "execute-command": "@OPT_DIR@/scripts/golden-sync-webhook.sh",
+    "command-working-directory": "@OPT_DIR@",
+    "response-message": "queued",
+    "include-command-output-in-response": false,
+    "trigger-rule": {
+      "and": [
+        {
+          "match": {
+            "type": "payload-hmac-sha256",
+            "secret": "@WEBHOOK_SECRET@",
+            "parameter": { "source": "header", "name": "X-Hub-Signature-256" }
+          }
+        },
+        {
+          "match": {
+            "type": "value",
+            "value": "refs/heads/@DEFAULT_BRANCH@",
+            "parameter": { "source": "payload", "name": "ref" }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "preview",
+    "execute-command": "@OPT_DIR@/scripts/preview-webhook.sh",
+    "command-working-directory": "@OPT_DIR@",
+    "response-message": "queued",
+    "include-command-output-in-response": false,
+    "pass-arguments-to-command": [
+      { "source": "payload", "name": "comment.user.login" },
+      { "source": "payload", "name": "issue.number" },
+      { "source": "payload", "name": "repository.full_name" },
+      { "source": "payload", "name": "comment.id" },
+      { "source": "payload", "name": "comment.body" }
+    ],
+    "trigger-rule": {
+      "and": [
+        {
+          "match": {
+            "type": "payload-hmac-sha256",
+            "secret": "@WEBHOOK_SECRET@",
+            "parameter": { "source": "header", "name": "X-Hub-Signature-256" }
+          }
+        },
+        {
+          "match": {
+            "type": "value",
+            "value": "issue_comment",
+            "parameter": { "source": "header", "name": "X-GitHub-Event" }
+          }
+        },
+        {
+          "match": {
+            "type": "value",
+            "value": "created",
+            "parameter": { "source": "payload", "name": "action" }
+          }
+        },
+        {
+          "match": {
+            "type": "regex",
+            "regex": "^/boxd-preview\\b",
+            "parameter": { "source": "payload", "name": "comment.body" }
+          }
+        },
+        {
+          "or": [
+            { "match": { "type": "value", "value": "OWNER", "parameter": { "source": "payload", "name": "comment.author_association" } } },
+            { "match": { "type": "value", "value": "MEMBER", "parameter": { "source": "payload", "name": "comment.author_association" } } },
+            { "match": { "type": "value", "value": "COLLABORATOR", "parameter": { "source": "payload", "name": "comment.author_association" } } }
+          ]
+        }
+      ]
+    }
+  }
+]
