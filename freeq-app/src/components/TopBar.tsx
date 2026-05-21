@@ -154,6 +154,9 @@ export function TopBar({ onToggleSidebar, onToggleMembers, membersOpen }: TopBar
 
       {/* AV session — controls moved to CallPanel + Sidebar */}
 
+      {/* Copy invite link (channels only) */}
+      {isChannel && <CopyInviteButton channel={ch?.name || activeChannel} />}
+
       {/* Settings gear (channels only) */}
       {isChannel && (
         <button
@@ -266,6 +269,59 @@ function VoiceButton({ channel }: { channel: string }) {
       title={isInCall ? 'In voice call' : session ? 'Join voice call' : 'Start voice call'}
     >
       <SpeakerIcon size={14} />
+    </button>
+  );
+}
+
+/** One-click "copy invite link" affordance in the channel header. The
+ * URL shape matches the existing `/join/#<channel>` invite path that
+ * the SPA already handles on the connect screen (see `LS_CHANNELS`
+ * auto-join logic in `ConnectScreen.tsx`), so this just surfaces an
+ * already-supported deep-link where a user would naturally look for
+ * it — next to the channel name. */
+function CopyInviteButton({ channel }: { channel: string }) {
+  const [copied, setCopied] = useState(false);
+  const onClick = async () => {
+    const channelName = channel.startsWith('#') ? channel : `#${channel}`;
+    const link = `${window.location.origin}/join/${encodeURIComponent(channelName)}`;
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      // Clipboard API can fail in non-secure contexts or when the
+      // document isn't focused. Fall back to a transient textarea —
+      // ugly but works everywhere.
+      const ta = document.createElement('textarea');
+      ta.value = link;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch { /* noop */ }
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  };
+  return (
+    <button
+      onClick={onClick}
+      className={`p-1.5 rounded-lg hover:bg-bg-tertiary transition-colors ${
+        copied ? 'text-success' : 'text-fg-dim hover:text-fg-muted'
+      }`}
+      title={copied ? 'Invite link copied' : 'Copy invite link for this channel'}
+      aria-label="Copy invite link"
+    >
+      {copied ? (
+        <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/>
+        </svg>
+      ) : (
+        <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M6.354 5.5H4a3 3 0 000 6h3a3 3 0 002.83-4H8.5a2 2 0 00-.193.01 2 2 0 11-2.354-2.51z"/>
+          <path d="M9 5.5H7a3 3 0 000 6h3a3 3 0 003-3H11.5a2 2 0 01-2 2H9.5a2 2 0 110-4h0z" opacity="0"/>
+          <path d="M9 5a3 3 0 013 3 .75.75 0 01-1.5 0 1.5 1.5 0 00-1.5-1.5h-2.5a1.5 1.5 0 100 3h.5a.75.75 0 010 1.5h-.5a3 3 0 110-6H9zm-3 5.5a3 3 0 01-3-3 .75.75 0 011.5 0 1.5 1.5 0 001.5 1.5H9a1.5 1.5 0 100-3h-.5a.75.75 0 010-1.5H9a3 3 0 110 6H6z"/>
+        </svg>
+      )}
     </button>
   );
 }
