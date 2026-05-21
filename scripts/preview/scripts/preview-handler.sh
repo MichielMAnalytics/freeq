@@ -192,7 +192,7 @@ if ! [[ "$GOLDEN_CODE" =~ ^[23] ]]; then
   exit 0
 fi
 
-BOOT_COMMENT_ID=$(post_comment "<img src=\"https://raw.githubusercontent.com/MichielMAnalytics/boxd-assets/main/boxd-burst.gif\" width=\"20\" align=\"absmiddle\"/> creating boxd preview env for \`$PREVIEW_BRANCH\` → $URL
+BOOT_COMMENT_ID=$(post_comment "<img src=\"https://raw.githubusercontent.com/MichielMAnalytics/boxd-assets/main/boxd-burst.gif\" width=\"32\" align=\"absmiddle\"/> creating boxd preview env for \`$PREVIEW_BRANCH\` → $URL
 
 you can also ssh in: \`ssh $VM_NAME.$ZONE\`
 
@@ -281,7 +281,7 @@ else
     if [ "$attempt" -lt "$MAX_FORK_ATTEMPTS" ]; then
       delay=$(fork_backoff "$attempt")
       log "  backing off ${delay}s before attempt $((attempt + 1))"
-      update_boot_progress "<img src=\"https://raw.githubusercontent.com/MichielMAnalytics/boxd-assets/main/boxd-burst.gif\" width=\"20\" align=\"absmiddle\"/> creating boxd preview env for \`$PREVIEW_BRANCH\` → $URL
+      update_boot_progress "<img src=\"https://raw.githubusercontent.com/MichielMAnalytics/boxd-assets/main/boxd-burst.gif\" width=\"32\" align=\"absmiddle\"/> creating boxd preview env for \`$PREVIEW_BRANCH\` → $URL
 
 attempt $((attempt + 1))/$MAX_FORK_ATTEMPTS — boxd platform is being slow (\`$LAST_FORK_MSG\`), retrying in ${delay}s…"
       sleep "$delay"
