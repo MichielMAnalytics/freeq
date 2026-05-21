@@ -190,22 +190,44 @@ if ! [[ "$OWNER_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
   exit 1
 fi
 
-# gh CLI auth: prefer the existing session (works with GH_TOKEN env vars
-# or a prior `gh auth login`). Only fall back to GH_TOKEN_INIT if there's
-# no usable auth at all. If we end up with neither, fail with a short hint.
-if gh auth status >/dev/null 2>&1; then
+# gh CLI auth resolution. Three layers, picked in order:
+#
+#   1. boxd-github-token — the VM has a built-in helper that vends an
+#      installation token on demand (the interactive `gh` is a shell
+#      function wrapping this; under `bash <script>` that function is
+#      unavailable, so we call the helper directly).
+#   2. Existing gh session (GH_TOKEN / GITHUB_TOKEN env or hosts.yml).
+#   3. GH_TOKEN_INIT one-shot env var.
+#
+# Whichever source wins, GH_TOKEN gets exported for the rest of the
+# script (and the gh-api subshells it spawns).
+if command -v boxd-github-token >/dev/null 2>&1; then
+  BOXD_TOKEN=$(boxd-github-token 2>/dev/null || true)
+  if [ -n "$BOXD_TOKEN" ]; then
+    export GH_TOKEN="$BOXD_TOKEN"
+    echo "==> using boxd-github-token (the boxd VM's built-in GitHub helper)"
+  fi
+fi
+
+if [ -z "${GH_TOKEN:-}" ] && gh auth status >/dev/null 2>&1; then
   GH_USER=$(gh api user --jq .login 2>/dev/null || echo "?")
-  echo "==> gh CLI already authenticated as $GH_USER — using existing credentials"
-elif [ -n "${GH_TOKEN_INIT:-}" ]; then
+  echo "==> gh CLI already authenticated as $GH_USER"
+elif [ -z "${GH_TOKEN:-}" ] && [ -n "${GH_TOKEN_INIT:-}" ]; then
   echo "==> authenticating gh CLI from GH_TOKEN_INIT"
   ( unset GH_TOKEN GITHUB_TOKEN
     printf '%s\n' "$GH_TOKEN_INIT" \
       | gh auth login --with-token --hostname github.com )
-else
+fi
+
+if ! gh auth status >/dev/null 2>&1; then
   cat >&2 <<HELP
 
-  ERROR: gh CLI has no usable credentials. Run \`gh auth login\` first
-  (or set GH_TOKEN / GITHUB_TOKEN in the environment), then re-run.
+  ERROR: gh CLI has no usable credentials.
+
+  On a boxd VM: link GitHub at https://boxd.sh/app so boxd-github-token
+  starts vending tokens.
+  Otherwise: run \`gh auth login\` (or set GH_TOKEN / GITHUB_TOKEN), then
+  re-run.
 
 HELP
   exit 1
