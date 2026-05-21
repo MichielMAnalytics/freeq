@@ -976,7 +976,7 @@ fn is_allowed_origin(origin: &str) -> bool {
     if let Ok(url) = url::Url::parse(origin) {
         if url.scheme() == "https" {
             if let Some(host) = url.host_str() {
-                if host.ends_with(".boxd.sh") && url.port().is_none() {
+                if (host.ends_with(".boxd.sh") || host.ends_with(".boxd-stg.sh")) && url.port().is_none() {
                     return true;
                 }
             }
@@ -1368,7 +1368,7 @@ fn is_valid_return_to(url: &str) -> bool {
     if let Ok(parsed) = url::Url::parse(url) {
         if parsed.scheme() == "https" {
             if let Some(host) = parsed.host_str() {
-                if host.ends_with(".boxd.sh") && parsed.port().is_none() {
+                if (host.ends_with(".boxd.sh") || host.ends_with(".boxd-stg.sh")) && parsed.port().is_none() {
                     return true;
                 }
             }

@@ -153,7 +153,7 @@ export function ConnectScreen() {
     if (host === 'irc.freeq.at') return 'https://auth.freeq.at';
     // boxd dev VMs: derive broker URL by prefixing `auth.` to the hostname,
     // matching the proxy created via `boxd proxy new auth --port=8081`.
-    if (host.endsWith('.boxd.sh')) return `${window.location.protocol}//auth.${host}`;
+    if (host.endsWith('.boxd.sh') || host.endsWith('.boxd-stg.sh')) return `${window.location.protocol}//auth.${host}`;
     return webOrigin;
   });
   const [error, setError] = useState('');
