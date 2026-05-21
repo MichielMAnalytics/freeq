@@ -23,6 +23,15 @@ set -euo pipefail
 CONF=${FREEQ_PREVIEW_CONF:-/etc/freeq-preview.conf}
 [ -f "$CONF" ] && . "$CONF"
 
+# When systemd spawns us via webhook(8), the env is empty — the boxd
+# `gh` shell function isn't loaded, so bare /usr/bin/gh has no creds.
+# Pull a token from boxd-github-token (the helper at /usr/local/bin/)
+# and export it for the rest of the script. Same fix as enable-preview.sh.
+if [ -z "${GH_TOKEN:-}" ] && command -v boxd-github-token >/dev/null 2>&1; then
+  BOXD_TOKEN=$(boxd-github-token 2>/dev/null || true)
+  [ -n "$BOXD_TOKEN" ] && export GH_TOKEN="$BOXD_TOKEN"
+fi
+
 OPT_DIR=${FREEQ_PREVIEW_OPT_DIR:-/home/boxd/freeq/scripts/preview}
 REPO_DIR=${REPO_DIR:-/home/boxd/freeq}
 VM_PREFIX=${VM_PREFIX:-freeq-pr}
